@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 *.db
 .env
+scans/live_scan_*.xml

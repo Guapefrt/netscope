@@ -1,26 +1,47 @@
 import urllib.request
+import urllib.parse
 import json
 import sys
 
 BASE_URL = "http://127.0.0.1:8000"
 
-def fetch(endpoint):
+
+def fetch(endpoint, method="GET"):
     try:
-        req = urllib.request.Request(f"{BASE_URL}{endpoint}")
-        with urllib.request.urlopen(req) as response:
+        req = urllib.request.Request(f"{BASE_URL}{endpoint}", method=method)
+        with urllib.request.urlopen(req, timeout=130) as response:
             return json.loads(response.read().decode())
     except Exception as e:
         print(f"[!] Error connecting to NetScope API at {BASE_URL}: {e}")
         sys.exit(1)
+
 
 def print_banner():
     print("=" * 65)
     print("   NETSCOPE CLI - Network & Endpoint Security Dashboard")
     print("=" * 65)
 
+
 def cmd_status():
     data = fetch("/")
-    print(f"\n[*] API Status: {data.get('status')} | Project: {data.get('project')}")
+    print(f"\n[*] API Status: {data.get('status')} | Project: {data.get('project')} (v{data.get('version', '0.1.0')})")
+
+
+def cmd_scan(target="127.0.0.1", webhook_url=None):
+    print(f"\n[*] Triggering live Nmap scan against target: {target} ...")
+    params = {"target": target, "notify_always": "true"}
+    if webhook_url:
+        params["webhook_url"] = webhook_url
+    query = urllib.parse.urlencode(params)
+    data = fetch(f"/api/v1/scan/live?{query}", method="POST")
+
+    print(f"[+] {data.get('message')} (Scan ID: {data.get('scan_id')})")
+    print(f"    Saved XML: {data.get('output_file')}")
+    print(f"    Hosts Discovered: {data.get('hosts_discovered')}")
+    print(f"    Drift Detected: {data.get('drift_detected')}")
+    alert = data.get("webhook_alert", {})
+    print(f"    Webhook Alert: {'Sent (HTTP ' + str(alert.get('status_code')) + ')' if alert.get('sent') else 'Skipped (' + str(alert.get('reason')) + ')'}")
+
 
 def cmd_assets():
     assets = fetch("/api/v1/assets")
@@ -33,7 +54,7 @@ def cmd_assets():
         print(f"    Open Services:")
         for s in a['services']:
             print(f"      - Port {s['port']}/{s['protocol']}: {s['service']} ({s['product']} {s['version']})")
-        
+
         if a.get('endpoint_security'):
             sec = a['endpoint_security']
             print(f"    Wazuh Endpoint Telemetry:")
@@ -42,6 +63,7 @@ def cmd_assets():
         else:
             print(f"    Wazuh Endpoint Telemetry: Not Correlated")
         print("-" * 65)
+
 
 def cmd_scans():
     scans = fetch("/api/v1/scans")
@@ -52,20 +74,21 @@ def cmd_scans():
         print(f"    Source: {s['source_file']}")
     print("-" * 65)
 
+
 def cmd_diff():
     result = fetch("/api/v1/scans/compare-latest")
     if "message" in result:
         print(f"\n[!] {result['message']} (Found: {result.get('total_scans_found', 0)})")
         return
-    
+
     comp = result.get("comparison", {})
     print(f"\n[+] Scan Drift Comparison (Previous ID: {comp.get('previous_scan_id')} -> Current ID: {comp.get('current_scan_id')})")
     print("-" * 65)
-    
+
     new_devs = comp.get("new_devices_detected", [])
     dis_devs = comp.get("devices_disappeared", [])
     changes = comp.get("service_changes_on_existing_devices", [])
-    
+
     print(f"  • New Devices Detected: {new_devs if new_devs else 'None'}")
     print(f"  • Disappeared Devices: {dis_devs if dis_devs else 'None'}")
     print(f"  • Service Changes on Existing Devices: {len(changes)}")
@@ -75,13 +98,14 @@ def cmd_diff():
         print(f"      Removed Services: {ch['removed_services']}")
     print("-" * 65)
 
+
 def cmd_risk():
     data = fetch("/api/v1/risk/dashboard")
     print(f"\n[+] NetScope Executive Risk & Prioritization Dashboard")
     print(f"    Global Network Risk Score: {data.get('global_network_risk_score')} points")
     print(f"    Total Assets Evaluated: {data.get('assets_evaluated')}")
     print("-" * 65)
-    
+
     for item in data.get('prioritized_remediation_list', []):
         print(f"  • Asset ID: {item['asset_id']} | IP: {item['ip_address']} ({item['hostname'] or 'N/A'})")
         print(f"    Risk Score: {item['risk_score']} | Severity: [{item['severity']}]")
@@ -93,25 +117,25 @@ def cmd_risk():
             print(f"      - No immediate risk factors detected.")
         print("-" * 65)
 
+
 def cmd_reset():
-    try:
-        req = urllib.request.Request(f"{BASE_URL}/api/v1/reset", method="DELETE")
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode())
-            print(f"\n[+] {data.get('message')}")
-    except Exception as e:
-        print(f"[!] Error resetting database: {e}")
-        sys.exit(1)
+    data = fetch("/api/v1/reset", method="DELETE")
+    print(f"\n[+] {data.get('message')}")
+
 
 if __name__ == "__main__":
     print_banner()
     if len(sys.argv) < 2:
-        print("\nUsage: python netscope_cli.py [status | assets | scans | diff | risk | reset]")
+        print("\nUsage: python netscope_cli.py [status | scan <target> [webhook_url] | assets | scans | diff | risk | reset]")
         sys.exit(1)
-    
+
     command = sys.argv[1].lower()
     if command == "status":
         cmd_status()
+    elif command == "scan":
+        target_arg = sys.argv[2] if len(sys.argv) >= 3 else "127.0.0.1"
+        webhook_arg = sys.argv[3] if len(sys.argv) >= 4 else None
+        cmd_scan(target_arg, webhook_arg)
     elif command == "assets":
         cmd_assets()
     elif command == "scans":
@@ -123,4 +147,4 @@ if __name__ == "__main__":
     elif command == "reset":
         cmd_reset()
     else:
-        print(f"Unknown command: {command}. Use status, assets, scans, diff, risk, or reset.")
+        print(f"Unknown command: {command}. Use status, scan, assets, scans, diff, risk, or reset.")
