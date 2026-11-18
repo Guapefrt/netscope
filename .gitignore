@@ -4,3 +4,4 @@ __pycache__/
 *.db
 .env
 scans/live_scan_*.xml
+.pytest_cache/
