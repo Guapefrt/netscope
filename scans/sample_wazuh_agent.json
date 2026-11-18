@@ -1,0 +1,27 @@
+{
+  "agent_id": "001",
+  "hostname": "alex-arch",
+  "ip_address": "192.168.1.24",
+  "status": "active",
+  "os": {
+    "name": "Arch Linux",
+    "version": "rolling",
+    "platform": "arch"
+  },
+  "packages": [
+    {"name": "openssh", "version": "9.6p1-1", "architecture": "x86_64"},
+    {"name": "linux-zen", "version": "6.7.4.zen1-1", "architecture": "x86_64"},
+    {"name": "wireshark-cli", "version": "4.2.2-1", "architecture": "x86_64"},
+    {"name": "python", "version": "3.11.8-1", "architecture": "x86_64"}
+  ],
+  "configuration_assessments": {
+    "total_checks": 45,
+    "passed": 43,
+    "failed": 2,
+    "details": [
+      {"rule_id": "1001", "description": "Ensure SSH Root Login is disabled", "status": "PASSED"},
+      {"rule_id": "1004", "description": "Ensure SSH Password Authentication is disabled", "status": "PASSED"},
+      {"rule_id": "2012", "description": "Check file permissions on /etc/shadow", "status": "FAILED"}
+    ]
+  }
+}

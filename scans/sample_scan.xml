@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun SYSTEM "https://svn.nmap.org/nmap/docs/nmap.dtd">
+<nmaprun scanner="nmap" args="nmap -sV -oX sample_scan.xml 192.168.1.0/24" start="1700000000" version="7.94">
+<host starttime="1700000001" endtime="1700000005">
+<status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.1.1" addrtype="ipv4"/>
+<address addr="AA:BB:CC:DD:EE:FF" addrtype="mac" vendor="ASUSTek Computer"/>
+<hostnames>
+<hostname name="router.home" type="PTR"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="53"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="domain" product="dnsmasq" version="2.86" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="http" product="lighttpd" version="1.4.63" method="probed" conf="10"/></port>
+</ports>
+<os><osmatch name="Linux 5.4 - 5.15" accuracy="95" line="75"/></os>
+</host>
+<host starttime="1700000002" endtime="1700000008">
+<status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="192.168.1.24" addrtype="ipv4"/>
+<address addr="11:22:33:44:55:66" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+<hostname name="alex-arch" type="user"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="ssh" product="OpenSSH" version="9.6p1 Arch Linux" method="probed" conf="10"/></port>
+</ports>
+<os><osmatch name="Arch Linux" accuracy="99" line="100"/></os>
+</host>
+<runstats><finished time="1700000010" timestr="Wed Nov 15 12:00:00 2023" summary="Nmap done"/></runstats>
+</nmaprun>

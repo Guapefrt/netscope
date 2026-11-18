@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetScope | Network & Endpoint Risk Mapper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-6">
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="px-2.5 py-1 text-xs font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">LIVE TELEMETRY</span>
+          <h1 class="text-2xl font-bold tracking-tight text-white">NetScope Risk & Topology Console</h1>
+        </div>
+        <p class="text-sm text-slate-400 mt-1">Hybrid Network Discovery (Nmap) & Endpoint Compliance (Wazuh SCA) Correlation</p>
+      </div>
+      <div class="flex gap-3 mt-3 sm:mt-0">
+        <button onclick="loadDemoData()" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition">
+          Ingest Demo Telemetry
+        </button>
+        <button onclick="refreshDashboard()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-md transition">
+          Refresh Data
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Cards -->
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Global Network Risk</p>
+        <p id="kpi-global-risk" class="text-3xl font-bold text-rose-400 mt-2">--</p>
+        <p class="text-xs text-slate-500 mt-1">Cumulative exposure points</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Discovered Assets</p>
+        <p id="kpi-assets-count" class="text-3xl font-bold text-sky-400 mt-2">--</p>
+        <p class="text-xs text-slate-500 mt-1">Active hosts correlated</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Critical / High Hosts</p>
+        <p id="kpi-critical-count" class="text-3xl font-bold text-amber-400 mt-2">--</p>
+        <p class="text-xs text-slate-500 mt-1">Immediate remediation needed</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <p class="text-xs font-medium uppercase tracking-wider text-slate-400">Wazuh Endpoint Agents</p>
+        <p id="kpi-wazuh-count" class="text-3xl font-bold text-emerald-400 mt-2">--</p>
+        <p class="text-xs text-slate-500 mt-1">SCA compliance linked</p>
+      </div>
+    </section>
+
+    <!-- Main Grid: Topology + Prioritized Remediation -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Cytoscape Topology Map -->
+      <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Network Attack Surface Map</h2>
+          <span class="text-xs text-slate-500">Interactive Graph</span>
+        </div>
+        <div id="cy" class="w-full h-80 bg-slate-950 rounded-lg border border-slate-800/80"></div>
+        <div class="flex items-center gap-4 mt-3 text-xs text-slate-400">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>Critical</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Medium</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Low</span>
+        </div>
+      </div>
+
+      <!-- Prioritized Remediation Table -->
+      <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-4">Prioritized Remediation Queue</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs uppercase text-slate-400">
+                <th class="py-2.5 px-3">Host / IP</th>
+                <th class="py-2.5 px-3">Telemetry</th>
+                <th class="py-2.5 px-3">Severity</th>
+                <th class="py-2.5 px-3">Risk Factors</th>
+              </tr>
+            </thead>
+            <tbody id="remediation-body" class="divide-y divide-slate-800/70 text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <script>
+    const severityColors = {
+      CRITICAL: { badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30', node: '#f43f5e' },
+      HIGH:     { badge: 'bg-orange-500/15 text-orange-400 border-orange-500/30', node: '#fb923c' },
+      MEDIUM:   { badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30', node: '#fbbf24' },
+      LOW:      { badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', node: '#34d399' }
+    };
+
+    async function loadDemoData() {
+      await fetch('/api/v1/reset', { method: 'DELETE' });
+      await fetch('/api/v1/ingest/nmap', { method: 'POST' });
+      await fetch('/api/v1/ingest/wazuh', { method: 'POST' });
+      await refreshDashboard();
+    }
+
+    async function refreshDashboard() {
+      const [riskRes, assetsRes] = await Promise.all([
+        fetch('/api/v1/risk/dashboard'),
+        fetch('/api/v1/assets')
+      ]);
+      const riskData = await riskRes.json();
+      const assets = await assetsRes.json();
+
+      document.getElementById('kpi-global-risk').textContent = `${riskData.global_network_risk_score} pts`;
+      document.getElementById('kpi-assets-count').textContent = riskData.assets_evaluated;
+      
+      const critHigh = riskData.prioritized_remediation_list.filter(a => ['CRITICAL', 'HIGH'].includes(a.severity)).length;
+      document.getElementById('kpi-critical-count').textContent = critHigh;
+
+      const wazuhLinked = assets.filter(a => a.endpoint_security !== null).length;
+      document.getElementById('kpi-wazuh-count').textContent = `${wazuhLinked} / ${assets.length}`;
+
+      const assetMap = Object.fromEntries(assets.map(a => [a.id, a]));
+      const tbody = document.getElementById('remediation-body');
+      tbody.innerHTML = '';
+
+      riskData.prioritized_remediation_list.forEach(item => {
+        const asset = assetMap[item.asset_id] || {};
+        const style = severityColors[item.severity] || severityColors.LOW;
+        const ports = (asset.services || []).map(s => `${s.port}/${s.service}`).join(', ') || 'None';
+        const wazuhText = asset.endpoint_security 
+          ? `Wazuh #${asset.endpoint_security.agent_id} (${asset.endpoint_security.failed} SCA fails)` 
+          : 'Network Scan Only';
+        const factorsHtml = item.risk_factors.length 
+          ? item.risk_factors.map(f => `<div class="text-xs text-slate-300">• ${f}</div>`).join('')
+          : `<span class="text-xs text-slate-500">No critical exposures</span>`;
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-3 align-top">
+              <div class="font-semibold text-white">${item.hostname || 'Unknown Host'}</div>
+              <div class="text-xs font-mono text-slate-400">${item.ip_address}</div>
+            </td>
+            <td class="py-3 px-3 align-top">
+              <div class="text-xs text-sky-300 font-mono">Ports: ${ports}</div>
+              <div class="text-xs text-slate-400 mt-0.5">${wazuhText}</div>
+            </td>
+            <td class="py-3 px-3 align-top">
+              <span class="px-2 py-0.5 text-xs font-bold border rounded ${style.badge}">
+                ${item.severity} (${item.risk_score})
+              </span>
+            </td>
+            <td class="py-3 px-3 align-top space-y-1">${factorsHtml}</td>
+          </tr>
+        `;
+      });
+
+      renderTopology(riskData.prioritized_remediation_list, assets);
+    }
+
+    function renderTopology(riskList, assets) {
+      const elements = [];
+      const gateway = assets.find(a => a.ip.endsWith('.1')) || assets[0];
+      
+      riskList.forEach(item => {
+        const color = (severityColors[item.severity] || severityColors.LOW).node;
+        elements.push({
+          data: {
+            id: `node-${item.asset_id}`,
+            label: `${item.hostname || item.ip_address}\n[${item.severity}: ${item.risk_score}]`,
+            borderColor: color
+          }
+        });
+        if (gateway && item.asset_id !== gateway.id) {
+          elements.push({
+            data: { source: `node-${gateway.id}`, target: `node-${item.asset_id}` }
+          });
+        }
+      });
+
+      cytoscape({
+        container: document.getElementById('cy'),
+        elements: elements,
+        layout: { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.4 },
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'background-color': '#1e293b',
+              'border-width': 3,
+              'border-color': 'data(borderColor)',
+              'label': 'data(label)',
+              'color': '#f8fafc',
+              'font-size': '11px',
+              'text-valign': 'bottom',
+              'text-margin-y': 6,
+              'text-wrap': 'wrap',
+              'width': 38,
+              'height': 38
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 2,
+              'line-color': '#475569',
+              'target-arrow-color': '#475569',
+              'target-arrow-shape': 'triangle',
+              'curve-style': 'bezier'
+            }
+          }
+        ]
+      });
+    }
+
+    refreshDashboard();
+  </script>
+</body>
+</html>
