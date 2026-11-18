@@ -1,3 +1,6 @@
+from app.threat_intel import ThreatIntel
+
+
 class RiskEngine:
     @staticmethod
     def calculate_asset_risk(asset) -> dict:
@@ -14,15 +17,17 @@ class RiskEngine:
             else:
                 score += 5
 
-        if asset.endpoint_security:
-            failed_checks = asset.endpoint_security.failed_checks
-            if failed_checks > 0:
-                score += (failed_checks * 15)
-                factors.append(f"Wazuh SCA: {failed_checks} configuration compliance failures")
+        if asset.endpoint_security and asset.endpoint_security.failed_checks > 0:
+            score += (asset.endpoint_security.failed_checks * 15)
+            factors.append(f"Wazuh SCA: {asset.endpoint_security.failed_checks} configuration compliance failures")
 
-        pkg_count = len(asset.packages)
-        if pkg_count > 0:
-            score += min(pkg_count * 2, 20)
+        if len(asset.packages) > 0:
+            score += min(len(asset.packages) * 2, 20)
+            for pkg in asset.packages:
+                cves = ThreatIntel.lookup_package_cves(pkg.name, pkg.version)
+                for cve in cves:
+                    score += 20
+                    factors.append(f"CVE Detected ({cve['id']}) in {pkg.name} {pkg.version}: {cve['summary']}")
 
         if score >= 60:
             severity = "CRITICAL"
